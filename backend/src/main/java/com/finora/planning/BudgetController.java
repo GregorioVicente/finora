@@ -1,0 +1,9 @@
+package com.finora.planning;
+import com.finora.transaction.*; import org.springframework.security.core.Authentication; import org.springframework.web.bind.annotation.*; import java.math.BigDecimal; import java.time.YearMonth; import java.util.*;
+@RestController @RequestMapping("/api/budgets") @CrossOrigin(origins={"http://localhost:5173","http://localhost:4173"})
+public class BudgetController {private final BudgetRepository budgets;private final TransactionService transactions;public BudgetController(BudgetRepository b,TransactionService t){budgets=b;transactions=t;}
+@GetMapping public List<BudgetView> list(@RequestParam String month,Authentication auth){Map<String,BigDecimal> spent=new HashMap<>();transactions.byMonth(YearMonth.parse(month),auth.getName()).stream().filter(t->t.getAmount().signum()<0).forEach(t->spent.merge(t.getCategory(),t.getAmount().abs(),BigDecimal::add));return budgets.findByOwnerEmailAndMonthOrderByCategory(auth.getName(),month).stream().map(b->new BudgetView(b.getId(),b.getMonth(),b.getCategory(),b.getLimitAmount(),spent.getOrDefault(b.getCategory(),BigDecimal.ZERO))).toList();}
+@PostMapping public Budget save(@RequestBody BudgetRequest body,Authentication auth){Budget b=budgets.findByOwnerEmailAndMonthAndCategory(auth.getName(),body.month(),body.category()).orElse(new Budget(auth.getName(),body.month(),body.category(),body.limitAmount()));b.setLimitAmount(body.limitAmount());return budgets.save(b);}
+@DeleteMapping("/{id}") public void delete(@PathVariable Long id,Authentication auth){budgets.delete(budgets.findByIdAndOwnerEmail(id,auth.getName()).orElseThrow(()->new NoSuchElementException("Planejamento não encontrado.")));}
+public record BudgetRequest(String month,String category,BigDecimal limitAmount){} public record BudgetView(Long id,String month,String category,BigDecimal limitAmount,BigDecimal spent){}
+}
